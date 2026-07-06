@@ -109,19 +109,33 @@ func TestLabelBG(t *testing.T) {
 }
 
 func TestRenderLabelBackgroundTracksFillState(t *testing.T) {
-	// pct=30, width=10 -> filled=3, label "30%" (3 chars) centered at index 3,
-	// spanning indices 3,4,5 - all within the filled region (0..2 filled...
-	// wait filled=3 means indices 0,1,2 filled). Use a pct/width combo where
-	// the label straddles the fill boundary to exercise both branches.
-	got := Render(30, 10) // filled=3, label "30%" starts at (10-3)/2=3, spans 3,4,5 (all empty)
-	if !strings.Contains(got, fmt.Sprintf("\033[48;5;%dm", emptyBG)) {
+	got := Render(30, 10) // filled=3, label "30%" spans indices 3,4,5 (all empty cells)
+	if !strings.Contains(got, fmt.Sprintf("48;5;%dm", emptyBG)) {
 		t.Errorf("Render(30, 10) = %q, want at least one empty-cell background code", got)
 	}
 
-	got2 := Render(90, 10) // filled=9, label "90%" starts at (10-3)/2=3, spans 3,4,5 (all filled)
+	got2 := Render(90, 10) // filled=9, label "90%" spans indices 3,4,5 (all filled cells)
 	color := Color256(90)
-	if !strings.Contains(got2, fmt.Sprintf("\033[48;5;%dm", color)) {
+	if !strings.Contains(got2, fmt.Sprintf("48;5;%dm", color)) {
 		t.Errorf("Render(90, 10) = %q, want at least one filled-cell background code %d", got2, color)
+	}
+}
+
+func TestRenderEmptyBarLabelHasNoBackground(t *testing.T) {
+	got := Render(0, 10)
+	if strings.Contains(got, "48;5;") {
+		t.Errorf("Render(0, 10) = %q, want no background codes on fully empty bar", got)
+	}
+	if !strings.Contains(stripANSI(got), "0%") {
+		t.Errorf("Render(0, 10) = %q, want visible 0%% label", got)
+	}
+}
+
+func TestRenderBatchesEscapeSequences(t *testing.T) {
+	// 4 style runs max for a mid-fill bar: leading bar, label (1-2 runs), trailing bar.
+	got := Render(50, 10)
+	if n := strings.Count(got, "\033["); n > 10 {
+		t.Errorf("Render(50, 10) has %d escape sequences, want batched (<=10): %q", n, got)
 	}
 }
 

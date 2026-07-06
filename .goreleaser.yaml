@@ -11,7 +11,7 @@ builds:
     env:
       - CGO_ENABLED=0
     ldflags:
-      - -s -w -X github.com/oxgrad/skein/cmd.Version={{.Version}}
+      - -s -w -X main.version={{.Version}}
     goos:
       - linux
       - darwin
@@ -39,11 +39,11 @@ changelog:
       - "^Merge "
 
 brews:
-  - name: knot
+  - name: skein
     repository:
       owner: oxGrad
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/oxGrad/skein"
-    description: "A lightweight, configurable dotfiles manager"
+    description: "Claude Code statusline: model, context/plan usage bars, caveman badge"
     license: MIT

@@ -91,30 +91,56 @@ func LabelBG(filledCell bool, color int) int {
 // percentage label centered inside the bar. Each label character's
 // background dynamically tracks the fill state of the cell underneath it -
 // filled cells shade the digit/glyph with the bar's own color, empty cells
-// with a neutral gray. If the label doesn't fit the width, it's appended
+// with a neutral gray. On a fully empty bar the label drops its background
+// entirely (gray-on-gray reads poorly). Runs of identically-styled cells
+// share one escape sequence to keep output small - the statusline re-renders
+// on every keystroke. If the label doesn't fit the width, it's appended
 // after the bar instead.
 func Render(pct, width int) string {
 	pct = Clamp(pct)
 	color := Color256(pct)
 	label := Label(pct)
 	filled := Filled(pct, width)
-	barRunes := []rune(Bars(pct, width))
 	start := LabelStart(label, width)
 
 	if start < 0 {
-		return fmt.Sprintf("\033[38;5;%dm%s\033[0m \033[38;5;250m%s\033[0m", color, string(barRunes), label)
+		return fmt.Sprintf("\033[38;5;%dm%s\033[0m \033[38;5;250m%s\033[0m", color, Bars(pct, width), label)
 	}
 
+	barStyle := fmt.Sprintf("\033[38;5;%dm", color)
 	var sb strings.Builder
-	for i, r := range barRunes {
-		if i >= start && i < start+len(label) {
-			filledCell := i < filled
-			fg := LabelFG(filledCell)
-			bg := LabelBG(filledCell, color)
-			fmt.Fprintf(&sb, "\033[1m\033[38;5;%dm\033[48;5;%dm%c\033[0m", fg, bg, label[i-start])
+	cur := ""
+	emit := func(style string, ch byte, r rune) {
+		if style != cur {
+			if cur != "" {
+				sb.WriteString("\033[0m")
+			}
+			sb.WriteString(style)
+			cur = style
+		}
+		if ch != 0 {
+			sb.WriteByte(ch)
 		} else {
-			fmt.Fprintf(&sb, "\033[38;5;%dm%c\033[0m", color, r)
+			sb.WriteRune(r)
 		}
 	}
+
+	for i := range width {
+		if i >= start && i < start+len(label) {
+			filledCell := i < filled
+			var style string
+			if filled == 0 {
+				style = "\033[1;38;5;250m"
+			} else {
+				style = fmt.Sprintf("\033[1;38;5;%d;48;5;%dm", LabelFG(filledCell), LabelBG(filledCell, color))
+			}
+			emit(style, label[i-start], 0)
+		} else if i < filled {
+			emit(barStyle, 0, '█')
+		} else {
+			emit(barStyle, 0, '░')
+		}
+	}
+	sb.WriteString("\033[0m")
 	return sb.String()
 }
