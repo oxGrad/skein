@@ -13,3 +13,6 @@ build:
 
 install:
   ./bin/skein install
+
+remove-stale-cache:
+  rm ~/.claude/.usage-cache.json

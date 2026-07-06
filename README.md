@@ -18,6 +18,15 @@ degrades gracefully on narrow terminals - countdowns drop first, then the
 weekly bar, then the 5-hour bar. Set `SKEIN_MARGIN` to adjust the right-edge
 margin used when aligning the badge (default 6).
 
+### `5h?` / `wk?`
+
+A `?` after `5h` or `wk` means that bar came from the local OAuth usage
+cache (`~/.claude/.usage-cache.json`), not live `rate_limits` data from
+Claude Code's stdin, and the cache is more than 10 minutes old - the
+background refresh isn't landing, so the number may be stale. Check that
+`~/.claude/.credentials.json` has a valid token, or delete the cache file
+to force a refetch on the next run.
+
 ## Install
 
 ### Homebrew
