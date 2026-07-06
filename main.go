@@ -72,8 +72,31 @@ func claudeHome() string {
 	return filepath.Join(home, ".claude")
 }
 
-func runInstall() {
+// installPath picks the path to record in settings.json. os.Executable
+// resolves symlinks, so under Homebrew it returns the versioned Cellar path
+// (.../Cellar/skein/1.0.1/bin/skein) instead of the stable PATH symlink -
+// breaking the statusLine command on the next upgrade. Prefer whatever
+// "skein" resolves to on PATH, but only when it's the same binary that's
+// actually running, so a stray unrelated "skein" earlier on PATH can't hijack
+// the install.
+func installPath() (string, error) {
 	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	p, err := exec.LookPath("skein")
+	if err != nil {
+		return exe, nil
+	}
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil || resolved != exe {
+		return exe, nil
+	}
+	return p, nil
+}
+
+func runInstall() {
+	exe, err := installPath()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "skein install: resolve executable path:", err)
 		os.Exit(1)
