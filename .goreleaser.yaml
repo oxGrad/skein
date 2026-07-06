@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: .
+    binary: skein
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/oxgrad/skein/cmd.Version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  make_latest: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs[:(]"
+      - "^test[:(]"
+      - "^chore[:(]"
+      - "^Merge "
+
+brews:
+  - name: knot
+    repository:
+      owner: oxGrad
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/oxGrad/skein"
+    description: "A lightweight, configurable dotfiles manager"
+    license: MIT
