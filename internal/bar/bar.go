@@ -64,38 +64,34 @@ func LabelStart(label string, width int) int {
 	return (width - len(label)) / 2
 }
 
-// emptyBG is the background color used for label characters sitting over
-// unfilled bar cells.
-const emptyBG = 238
-
 // LabelFG picks a foreground color for a label character, contrasting
 // against its cell's background: dark text over a filled (bright) cell,
-// light text over an empty (dark gray) cell.
-func LabelFG(filledCell bool) int {
+// near-white text over an empty cell's dim background.
+func LabelFG(filledCell bool, color int) int {
 	if filledCell {
 		return 232
 	}
-	return 250
+	return 255
 }
 
-// LabelBG picks a background color for a label character: the bar's own
-// color when it sits over a filled cell, a neutral dark gray otherwise.
-func LabelBG(filledCell bool, color int) int {
-	if filledCell {
-		return color
+// UnfilledBG picks the background for label characters over unfilled cells:
+// the dim 256-color shade that the ░ glyph (25% ink over a dark terminal)
+// visually approximates for each bar color.
+func UnfilledBG(color int) int {
+	if color == 197 {
+		return 52
 	}
-	return emptyBG
+	return 58
 }
 
 // Render draws a colored bar of the given width for pct (0-100), with the
-// percentage label centered inside the bar. Each label character's
-// background dynamically tracks the fill state of the cell underneath it -
-// filled cells shade the digit/glyph with the bar's own color, empty cells
-// with a neutral gray. On a fully empty bar the label drops its background
-// entirely (gray-on-gray reads poorly). Runs of identically-styled cells
-// share one escape sequence to keep output small - the statusline re-renders
-// on every keystroke. If the label doesn't fit the width, it's appended
-// after the bar instead.
+// percentage label centered inside the bar. Over a filled cell the label
+// takes the bar's color as its background (dark text on bright color);
+// over an empty cell the background is a dim shade approximating the ░
+// glyph, with the bar's own color as foreground. Runs of identically-styled
+// cells share one escape sequence to keep output small - the statusline
+// re-renders on every keystroke. If the label doesn't fit the width, it's
+// appended after the bar instead.
 func Render(pct, width int) string {
 	pct = Clamp(pct)
 	color := Color256(pct)
@@ -128,12 +124,11 @@ func Render(pct, width int) string {
 	for i := range width {
 		if i >= start && i < start+len(label) {
 			filledCell := i < filled
-			var style string
-			if filled == 0 {
-				style = "\033[1;38;5;250m"
-			} else {
-				style = fmt.Sprintf("\033[1;38;5;%d;48;5;%dm", LabelFG(filledCell), LabelBG(filledCell, color))
+			bg := color
+			if !filledCell {
+				bg = UnfilledBG(color)
 			}
+			style := fmt.Sprintf("\033[1;38;5;%d;48;5;%dm", LabelFG(filledCell, color), bg)
 			emit(style, label[i-start], 0)
 		} else if i < filled {
 			emit(barStyle, 0, '█')

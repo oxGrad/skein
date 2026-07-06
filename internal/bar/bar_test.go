@@ -90,41 +90,45 @@ func TestLabelStart(t *testing.T) {
 	}
 }
 
-func TestLabelFG(t *testing.T) {
-	if got := LabelFG(true); got != 232 {
-		t.Errorf("LabelFG(true) = %d, want 232", got)
+func TestUnfilledBG(t *testing.T) {
+	if got := UnfilledBG(197); got != 52 {
+		t.Errorf("UnfilledBG(197) = %d, want 52", got)
 	}
-	if got := LabelFG(false); got != 250 {
-		t.Errorf("LabelFG(false) = %d, want 250", got)
+	if got := UnfilledBG(148); got != 58 {
+		t.Errorf("UnfilledBG(148) = %d, want 58", got)
 	}
-}
-
-func TestLabelBG(t *testing.T) {
-	if got := LabelBG(true, 148); got != 148 {
-		t.Errorf("LabelBG(true, 148) = %d, want 148", got)
-	}
-	if got := LabelBG(false, 148); got != emptyBG {
-		t.Errorf("LabelBG(false, 148) = %d, want %d", got, emptyBG)
+	if got := UnfilledBG(220); got != 58 {
+		t.Errorf("UnfilledBG(220) = %d, want 58", got)
 	}
 }
 
 func TestRenderLabelBackgroundTracksFillState(t *testing.T) {
-	got := Render(30, 10) // filled=3, label "30%" spans indices 3,4,5 (all empty cells)
-	if !strings.Contains(got, fmt.Sprintf("48;5;%dm", emptyBG)) {
-		t.Errorf("Render(30, 10) = %q, want at least one empty-cell background code", got)
+	// label "30%" spans indices 3,4,5 - all empty cells (filled=3) - so the
+	// background should be the dim unfilled shade, not the bar's color.
+	got := Render(30, 10)
+	color := Color256(30)
+	if !strings.Contains(got, fmt.Sprintf("48;5;%dm", UnfilledBG(color))) {
+		t.Errorf("Render(30, 10) = %q, want empty-cell label background %d", got, UnfilledBG(color))
+	}
+	if strings.Contains(got, fmt.Sprintf("48;5;%dm", color)) {
+		t.Errorf("Render(30, 10) = %q, want no bar-color background on empty-cell label", got)
 	}
 
 	got2 := Render(90, 10) // filled=9, label "90%" spans indices 3,4,5 (all filled cells)
-	color := Color256(90)
-	if !strings.Contains(got2, fmt.Sprintf("48;5;%dm", color)) {
-		t.Errorf("Render(90, 10) = %q, want at least one filled-cell background code %d", got2, color)
+	color2 := Color256(90)
+	if !strings.Contains(got2, fmt.Sprintf("48;5;%dm", color2)) {
+		t.Errorf("Render(90, 10) = %q, want at least one filled-cell background code %d", got2, color2)
 	}
 }
 
-func TestRenderEmptyBarLabelHasNoBackground(t *testing.T) {
+func TestRenderEmptyBarLabelHasUnfilledBackground(t *testing.T) {
 	got := Render(0, 10)
-	if strings.Contains(got, "48;5;") {
-		t.Errorf("Render(0, 10) = %q, want no background codes on fully empty bar", got)
+	color := Color256(0)
+	if !strings.Contains(got, fmt.Sprintf("48;5;%dm", UnfilledBG(color))) {
+		t.Errorf("Render(0, 10) = %q, want label background %d on fully empty bar", got, UnfilledBG(color))
+	}
+	if !strings.Contains(got, "38;5;255;") {
+		t.Errorf("Render(0, 10) = %q, want near-white label foreground 255", got)
 	}
 	if !strings.Contains(stripANSI(got), "0%") {
 		t.Errorf("Render(0, 10) = %q, want visible 0%% label", got)
