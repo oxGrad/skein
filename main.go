@@ -116,21 +116,24 @@ type planInfo struct {
 
 // layout is one rung of the degradation ladder for narrow terminals.
 type layout struct {
-	ctxWidth      int
-	planWidth     int
-	show5h        bool
-	showWk        bool
-	showCountdown bool
+	ctxWidth    int
+	planWidth   int
+	show5h      bool
+	showWk      bool
+	show5hReset bool
+	showWkReset bool
 }
 
 // layouts is tried in order until one fits the terminal width; the last is
-// the floor.
+// the floor. The 5h reset countdown is the most time-sensitive datum, so it
+// survives every rung that still shows the 5h bar - the wk countdown, then
+// the wk bar, then bar widths give way first.
 var layouts = []layout{
-	{ctxWidth: 10, planWidth: 10, show5h: true, showWk: true, showCountdown: true},
-	{ctxWidth: 10, planWidth: 8, show5h: true, showWk: true, showCountdown: false},
-	{ctxWidth: 10, planWidth: 8, show5h: true, showWk: false, showCountdown: false},
-	{ctxWidth: 8, planWidth: 6, show5h: true, showWk: false, showCountdown: false},
-	{ctxWidth: 6, planWidth: 0, show5h: false, showWk: false, showCountdown: false},
+	{ctxWidth: 10, planWidth: 10, show5h: true, showWk: true, show5hReset: true, showWkReset: true},
+	{ctxWidth: 10, planWidth: 8, show5h: true, showWk: true, show5hReset: true},
+	{ctxWidth: 10, planWidth: 8, show5h: true, showWk: false, show5hReset: true},
+	{ctxWidth: 8, planWidth: 6, show5h: true, showWk: false, show5hReset: true},
+	{ctxWidth: 6, planWidth: 0, show5h: false, showWk: false},
 }
 
 func runStatusline() {
@@ -292,13 +295,13 @@ func buildStatusline(model string, ctxPct int, plan *planInfo, l layout) string 
 
 	if l.show5h && plan.fiveHour != nil {
 		fmt.Fprintf(&out, " \033[38;5;250m│ 5h%s\033[0m %s", mark, bar.Render(*plan.fiveHour, l.planWidth))
-		if l.showCountdown && plan.fiveReset != "" {
+		if l.show5hReset && plan.fiveReset != "" {
 			fmt.Fprintf(&out, " \033[38;5;245m%s\033[0m", plan.fiveReset)
 		}
 	}
 	if l.showWk && plan.week != nil {
 		fmt.Fprintf(&out, " \033[38;5;250m│ wk%s\033[0m %s", mark, bar.Render(*plan.week, l.planWidth))
-		if l.showCountdown && plan.weekReset != "" {
+		if l.showWkReset && plan.weekReset != "" {
 			fmt.Fprintf(&out, " \033[38;5;245m%s\033[0m", plan.weekReset)
 		}
 	}

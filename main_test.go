@@ -198,14 +198,25 @@ func TestBuildStatuslineDegradedLayouts(t *testing.T) {
 	fh, wk := 57, 46
 	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
 
-	noCountdown := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[1]))
-	if strings.Contains(noCountdown, "1h23m") {
-		t.Errorf("layout[1] %q should drop countdowns", noCountdown)
+	noWkReset := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[1]))
+	if strings.Contains(noWkReset, "3d4h") {
+		t.Errorf("layout[1] %q should drop wk countdown", noWkReset)
+	}
+	if !strings.Contains(noWkReset, "1h23m") {
+		t.Errorf("layout[1] %q must keep 5h countdown", noWkReset)
 	}
 
 	noWk := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[2]))
 	if strings.Contains(noWk, "wk") {
 		t.Errorf("layout[2] %q should drop wk", noWk)
+	}
+	if !strings.Contains(noWk, "1h23m") {
+		t.Errorf("layout[2] %q must keep 5h countdown", noWk)
+	}
+
+	narrow := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[3]))
+	if !strings.Contains(narrow, "1h23m") {
+		t.Errorf("layout[3] %q must keep 5h countdown even when narrow", narrow)
 	}
 
 	floor := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[len(layouts)-1]))
