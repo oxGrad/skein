@@ -124,16 +124,58 @@ type layout struct {
 	showWkReset bool
 }
 
-// layouts is tried in order until one fits the terminal width; the last is
-// the floor. The 5h reset countdown is the most time-sensitive datum, so it
-// survives every rung that still shows the 5h bar - the wk countdown, then
-// the wk bar, then bar widths give way first.
-var layouts = []layout{
-	{ctxWidth: 10, planWidth: 10, show5h: true, showWk: true, show5hReset: true, showWkReset: true},
-	{ctxWidth: 10, planWidth: 8, show5h: true, showWk: true, show5hReset: true},
-	{ctxWidth: 10, planWidth: 8, show5h: true, showWk: false, show5hReset: true},
-	{ctxWidth: 8, planWidth: 6, show5h: true, showWk: false, show5hReset: true},
-	{ctxWidth: 6, planWidth: 0, show5h: false, showWk: false},
+// maxBarWidth and minBarWidth bound how wide ctx/plan bars can flex before a
+// whole section gets dropped. minBarWidth must fit a 3-char "100%" label.
+const (
+	maxBarWidth = 10
+	minBarWidth = 4
+)
+
+// featureSets lists which optional elements to show, richest first. Bar
+// widths are tried from maxBarWidth down to minBarWidth for each set before
+// falling through to the next, so on a shrinking terminal the bars narrow
+// smoothly first and whole sections (weekly countdown, then the weekly bar)
+// only disappear once shrinking alone can't make room - regardless of how
+// long the model name is, since that's counted as fixed overhead either way.
+var featureSets = []struct{ show5h, showWk, show5hReset, showWkReset bool }{
+	{show5h: true, showWk: true, show5hReset: true, showWkReset: true},
+	{show5h: true, showWk: true, show5hReset: true},
+	{show5h: true, show5hReset: true},
+	{show5h: true},
+	{},
+}
+
+// chooseLayout picks the richest (widest, most sections) layout whose
+// rendered content plus badge fits within cols. When cols is unknown, it
+// returns the richest layout unconditionally (matches prior fixed-width
+// behavior for terminals skein can't measure).
+func chooseLayout(model string, ctxPct int, plan *planInfo, b string, cols int, hasCols bool) (string, layout) {
+	fallback := layout{ctxWidth: maxBarWidth, planWidth: maxBarWidth, show5h: true, showWk: true, show5hReset: true, showWkReset: true}
+	fallbackContent := buildStatusline(model, ctxPct, plan, fallback)
+	if !hasCols {
+		return fallbackContent, fallback
+	}
+
+	budget := cols - rightAlignMargin()
+	if b != "" {
+		budget -= 1 + visibleWidth(b)
+	}
+
+	var last string
+	var lastLayout layout
+	for _, fs := range featureSets {
+		for w := maxBarWidth; w >= minBarWidth; w-- {
+			l := layout{ctxWidth: w, planWidth: w, show5h: fs.show5h, showWk: fs.showWk, show5hReset: fs.show5hReset, showWkReset: fs.showWkReset}
+			content := buildStatusline(model, ctxPct, plan, l)
+			last, lastLayout = content, l
+			if visibleWidth(content) <= budget {
+				return content, l
+			}
+		}
+	}
+	// Nothing fit even at the floor (ctx bar only, minimum width); use it
+	// anyway rather than showing nothing.
+	return last, lastLayout
 }
 
 func runStatusline() {
@@ -149,20 +191,7 @@ func runStatusline() {
 	b := shortenBadge(badge.Render(home, badge.ExecRunner))
 
 	cols, hasCols := terminalWidth()
-	content := ""
-	for i, l := range layouts {
-		content = buildStatusline(payload.Model.DisplayName, ctxPct, plan, l)
-		if !hasCols || i == len(layouts)-1 {
-			break
-		}
-		need := visibleWidth(content) + rightAlignMargin()
-		if b != "" {
-			need += 1 + visibleWidth(b)
-		}
-		if need <= cols {
-			break
-		}
-	}
+	content, _ := chooseLayout(payload.Model.DisplayName, ctxPct, plan, b, cols, hasCols)
 
 	if b != "" {
 		fmt.Println(rightAlignBadge(content, b))

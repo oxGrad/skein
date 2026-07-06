@@ -181,10 +181,12 @@ func TestFormatUntil(t *testing.T) {
 	}
 }
 
+var fullLayout = layout{ctxWidth: maxBarWidth, planWidth: maxBarWidth, show5h: true, showWk: true, show5hReset: true, showWkReset: true}
+
 func TestBuildStatuslineFullLayout(t *testing.T) {
 	fh, wk := 57, 46
 	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
-	got := buildStatusline("Sonnet 5", 33, plan, layouts[0])
+	got := buildStatusline("Sonnet 5", 33, plan, fullLayout)
 	vis := stripANSI(got)
 
 	for _, want := range []string{"Sonnet 5", "ctx", "5h", "wk", "1h23m", "3d4h", "33%", "57%", "46%"} {
@@ -198,28 +200,28 @@ func TestBuildStatuslineDegradedLayouts(t *testing.T) {
 	fh, wk := 57, 46
 	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
 
-	noWkReset := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[1]))
+	noWkReset := stripANSI(buildStatusline("Sonnet 5", 33, plan, layout{ctxWidth: 10, planWidth: 10, show5h: true, showWk: true, show5hReset: true}))
 	if strings.Contains(noWkReset, "3d4h") {
-		t.Errorf("layout[1] %q should drop wk countdown", noWkReset)
+		t.Errorf("no-wk-reset layout %q should drop wk countdown", noWkReset)
 	}
 	if !strings.Contains(noWkReset, "1h23m") {
-		t.Errorf("layout[1] %q must keep 5h countdown", noWkReset)
+		t.Errorf("no-wk-reset layout %q must keep 5h countdown", noWkReset)
 	}
 
-	noWk := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[2]))
+	noWk := stripANSI(buildStatusline("Sonnet 5", 33, plan, layout{ctxWidth: 10, planWidth: 10, show5h: true, show5hReset: true}))
 	if strings.Contains(noWk, "wk") {
-		t.Errorf("layout[2] %q should drop wk", noWk)
+		t.Errorf("no-wk layout %q should drop wk", noWk)
 	}
 	if !strings.Contains(noWk, "1h23m") {
-		t.Errorf("layout[2] %q must keep 5h countdown", noWk)
+		t.Errorf("no-wk layout %q must keep 5h countdown", noWk)
 	}
 
-	narrow := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[3]))
+	narrow := stripANSI(buildStatusline("Sonnet 5", 33, plan, layout{ctxWidth: minBarWidth, planWidth: minBarWidth, show5h: true, show5hReset: true}))
 	if !strings.Contains(narrow, "1h23m") {
-		t.Errorf("layout[3] %q must keep 5h countdown even when narrow", narrow)
+		t.Errorf("min-width layout %q must keep 5h countdown even when narrow", narrow)
 	}
 
-	floor := stripANSI(buildStatusline("Sonnet 5", 33, plan, layouts[len(layouts)-1]))
+	floor := stripANSI(buildStatusline("Sonnet 5", 33, plan, layout{ctxWidth: minBarWidth}))
 	if strings.Contains(floor, "5h") || strings.Contains(floor, "wk") {
 		t.Errorf("floor layout %q should drop all plan bars", floor)
 	}
@@ -231,19 +233,85 @@ func TestBuildStatuslineDegradedLayouts(t *testing.T) {
 func TestBuildStatuslineStaleMarker(t *testing.T) {
 	fh := 57
 	plan := &planInfo{fiveHour: &fh, stale: true}
-	vis := stripANSI(buildStatusline("", 10, plan, layouts[0]))
+	vis := stripANSI(buildStatusline("", 10, plan, fullLayout))
 	if !strings.Contains(vis, "5h?") {
 		t.Errorf("stale plan statusline %q missing 5h? marker", vis)
 	}
 }
 
 func TestBuildStatuslineNoModelNoPlan(t *testing.T) {
-	vis := stripANSI(buildStatusline("", 5, nil, layouts[0]))
+	vis := stripANSI(buildStatusline("", 5, nil, fullLayout))
 	if !strings.HasPrefix(vis, "ctx") {
 		t.Errorf("statusline %q should start with ctx when model absent", vis)
 	}
 	if strings.Contains(vis, "│") {
 		t.Errorf("statusline %q should have no separator without model/plan", vis)
+	}
+}
+
+func TestChooseLayoutNoColumnsUsesFullLayout(t *testing.T) {
+	fh, wk := 57, 46
+	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
+	content, l := chooseLayout("Sonnet 5", 33, plan, "[CAVE]", 0, false)
+	if l.ctxWidth != maxBarWidth || !l.showWk {
+		t.Errorf("chooseLayout without cols = %+v, want full/max layout", l)
+	}
+	if !strings.Contains(stripANSI(content), "wk") {
+		t.Errorf("content %q should include wk when cols unknown", content)
+	}
+}
+
+func TestChooseLayoutShrinksBarsBeforeDroppingSections(t *testing.T) {
+	fh, wk := 57, 46
+	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
+
+	// Full layout (max bar width) needs 68 cols; give less so it must shrink
+	// bar widths, but still enough to keep wk without dropping it.
+	content, l := chooseLayout("Sonnet 5", 33, plan, "", 60, true)
+	if l.ctxWidth == maxBarWidth {
+		t.Errorf("chooseLayout(80 cols) kept max bar width %+v, want shrunk", l)
+	}
+	if !l.showWk {
+		t.Errorf("chooseLayout(80 cols) dropped wk %+v, want bars to shrink first", l)
+	}
+	if visibleWidth(content) > 80 {
+		t.Errorf("content %q wider than 80 cols budget", content)
+	}
+}
+
+func TestChooseLayoutDropsWkOnlyWhenMinWidthInsufficient(t *testing.T) {
+	fh, wk := 57, 46
+	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
+
+	_, l := chooseLayout("Sonnet 5", 33, plan, "", 50, true)
+	if l.showWk {
+		t.Errorf("chooseLayout(50 cols) = %+v, want wk dropped at this width", l)
+	}
+}
+
+func TestChooseLayoutLongModelNameDropsWkEarlier(t *testing.T) {
+	fh, wk := 57, 46
+	plan := &planInfo{fiveHour: &fh, week: &wk, fiveReset: "1h23m", weekReset: "3d4h"}
+
+	_, shortModel := chooseLayout("A", 33, plan, "", 70, true)
+	_, longModel := chooseLayout("A Very Long Model Name Indeed", 33, plan, "", 70, true)
+
+	if !shortModel.showWk {
+		t.Errorf("short model name at 70 cols dropped wk unexpectedly: %+v", shortModel)
+	}
+	if longModel.showWk {
+		t.Errorf("long model name at 70 cols kept wk %+v, want it dropped for space", longModel)
+	}
+}
+
+func TestChooseLayoutFloorWhenNothingFits(t *testing.T) {
+	plan := &planInfo{}
+	content, l := chooseLayout("Sonnet 5", 33, plan, "[CAVE]", 5, true)
+	if l.ctxWidth != minBarWidth {
+		t.Errorf("chooseLayout(5 cols) = %+v, want floor min width even though it won't fit", l)
+	}
+	if content == "" {
+		t.Error("chooseLayout must still return content, not blank out, when nothing fits")
 	}
 }
 
