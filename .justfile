@@ -11,7 +11,7 @@ test:
 build:
   CGO_ENABLED=0 go build -o bin/skein .
 
-install:
+install: build
   ./bin/skein install
 
 remove-stale-cache:
